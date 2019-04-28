@@ -11,8 +11,14 @@ https://www.aliexpress.com/store/product/4WD-Wireless-JoyStick-Remote-Control-Ru
 #include "MotorDriver.h"
 #include <VirtualWire.h>
 
+#include "TM1637.h"
+#define CLK A5//connect CLK of the 4-Digit Display to A5 of Arduino and can be changed to other ports    
+#define DIO A4//
+TM1637 disp(CLK,DIO);
+
 int RF_RX_PIN = 2;
 void(* resetFunc) (void) = 0; //software reset when the RF receiver can not respond
+
 
 //Remote control code macro
 #define CTRL_INVALID     0
@@ -27,7 +33,7 @@ void(* resetFunc) (void) = 0; //software reset when the RF receiver can not resp
 #define CTRL_SPEED_UP    9
 #define CTRL_SPEED_DOWN  10
 
-#define XY_TOLERANCE 30
+#define XY_TOLERANCE 1
 #define X0 510//Initial value of X-asix of the Joystick
 #define Y0 510//Initial value of Y-asix of the Joystick
 
@@ -42,6 +48,11 @@ uint8_t speed0 = 100;//Initial value of speed
 #define PWMA 11
 
 void setup(){
+
+  disp.set(BRIGHT_TYPICAL);//BRIGHT_TYPICAL = 2,BRIGHT_DARKEST = 0,BRIGHTEST = 7;
+  disp.init(D4056A);//D4056A is the type of the module
+
+  
   motordriver.init(BIN1,BIN2,PWMB,AIN1,AIN2,PWMA);
   motordriver.setSpeed(speed0,MOTORA);
   motordriver.setSpeed(speed0,MOTORB);
@@ -62,38 +73,51 @@ uint8_t buffer[VW_MAX_MESSAGE_LEN]; // buffer array for data recieve over serial
 uint8_t buflen = VW_MAX_MESSAGE_LEN;
 
 void loop(){
+
   if(vw_get_message(buffer, &buflen)) // non-blocking I/O
   {
+    //disp.display(7.777);
     command = decode();
-	 if(command != CTRL_INVALID){
-	controlCar(command);
-  }
+    if(command != CTRL_INVALID){
+      controlCar(command);
+      //disp.display(0.001);
+    }
   }
  
 }
 
 void controlCar(uint8_t cmd){
-   switch(cmd)
+  switch(cmd)
   {
-    case CTRL_FORWARD:     new_status = CAR_FORWARD; break;
+  case CTRL_FORWARD:
+    //disp.display(1.100);
+    new_status = CAR_FORWARD; 
+    break;
 	case CTRL_RIGHT_FRONT: 
-		if(car_status != CAR_STOP)new_status = CAR_FORWARD;
+    //disp.display(1.200);
+		//if(car_status != CAR_STOP)new_status = CAR_FORWARD;
 		motordriver.goRight();
 		delay(200); 
 		break;
-	case CTRL_RIGHT_REAR:  
-		if(car_status != CAR_STOP)new_status = CAR_BACK; 
+	case CTRL_RIGHT_REAR: 
+    //disp.display(1.300);
+		//if(car_status != CAR_STOP)new_status = CAR_BACK; 
 		motordriver.goLeft();
 		delay(200); 
 		break;
-	case CTRL_BACKWARD:    new_status = CAR_BACK; break;
-	case CTRL_LEFT_REAR:   
-		if(car_status != CAR_STOP)new_status = CAR_BACK; 
+	case CTRL_BACKWARD:
+    //disp.display(1.400);
+    new_status = CAR_BACK;
+    break;
+	case CTRL_LEFT_REAR:
+    //disp.display(1.500);
+		//if(car_status != CAR_STOP)new_status = CAR_BACK; 
 		motordriver.goRight();
 		delay(200);
 		break;
-	case CTRL_LEFT_FRONT:  
-		if(car_status != CAR_STOP)new_status = CAR_FORWARD;
+	case CTRL_LEFT_FRONT:
+    //disp.display(1.600);
+		//if(car_status != CAR_STOP)new_status = CAR_FORWARD;
 		motordriver.goLeft();
 		delay(200);
 		break;
@@ -105,9 +129,9 @@ void controlCar(uint8_t cmd){
   switch(new_status)
   {
     case CAR_STOP: motordriver.stop();break;
-	case CAR_FORWARD: motordriver.goForward();break;
-	case CAR_BACK: motordriver.goBackward();break;
-	default: break;
+    case CAR_FORWARD: motordriver.goForward();break;
+    case CAR_BACK: motordriver.goBackward();break;
+    default: break;
   }
   car_status = new_status;
 }
@@ -128,52 +152,53 @@ void speedDown(){
 
 uint8_t decode()
 {
-
-   if((buffer[0]!=0x7E)||(buffer[4]!=0xEF))
+  if((buffer[0]!=0x7E)||(buffer[4]!=0xEF))
   {
-	resetFunc();//software reset
-	return 0;
+	  resetFunc();//software reset
+	  return 0;
   }
   int x,y; 
   int xh,xl,yh,yl;
   uint8_t z;
   uint8_t button;
   uint8_t i = 0;
-  x = buffer[1]<<2;
+  x = buffer[1];
   y = buffer[2]<<2;
   z = buffer[3]>>3;
   button = buffer[3]&0x07;
   
+  //disp.display(x);
+
   if((x <(X0+XY_TOLERANCE))&&(x >(X0-XY_TOLERANCE))) 
   {
     if(y > (Y0+XY_TOLERANCE))
       command = CTRL_FORWARD;
-	else if(y < Y0-XY_TOLERANCE)
-	  command = CTRL_BACKWARD;
-	else command = CTRL_INVALID;
+	  else if(y < Y0-XY_TOLERANCE)
+	    command = CTRL_BACKWARD;
+	  else command = CTRL_INVALID;
   }
   else if(x < (X0-XY_TOLERANCE))
   {
     if(y > (Y0+XY_TOLERANCE))
       command = CTRL_LEFT_FRONT;
-	else if(y < Y0-XY_TOLERANCE)
-	  command = CTRL_LEFT_REAR;
-	else command = CTRL_LEFT_FRONT;
+	  else if(y < Y0-XY_TOLERANCE)
+	    command = CTRL_LEFT_REAR;
+	  else command = CTRL_LEFT_FRONT;
   }
   else
   {
     if(y > (Y0+XY_TOLERANCE))
       command = CTRL_RIGHT_FRONT;
-	else if(y < Y0-XY_TOLERANCE)
-	  command = CTRL_RIGHT_REAR;
-	else command = CTRL_RIGHT_FRONT;
+	  else if(y < Y0-XY_TOLERANCE)
+	    command = CTRL_RIGHT_REAR;
+	  else command = CTRL_RIGHT_FRONT;
   }
   switch(button)
   {
     case 1: command = CTRL_SPEED_UP;break;
     case 2: command = CTRL_STOP;break;
-	case 3: command = CTRL_SPEED_DOWN;break;
-	default: break;
+	  case 3: command = CTRL_SPEED_DOWN;break;
+	  default: break;
   }
   clearBufferArray();
   return command;
